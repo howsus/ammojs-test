@@ -38,9 +38,7 @@ export interface VectorModifierEvent {
     | 'setLinearFactor'
     | 'setAngularFactor';
   uuid: string;
-  props: {
-    vector: [number, number, number];
-  }
+  props: [number, number, number];
 }
 
 export interface SubscribeEvent {

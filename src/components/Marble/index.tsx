@@ -14,6 +14,7 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
     args: 1,
     material: {
       restitution: 0.5,
+      friction: 1000,
     },
     ...props,
   }));
@@ -70,7 +71,6 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
   }, [handleKeyDown, handleKeyUp]);
 
   useEffect(() => position.subscribe((value) => {
-    console.log('value', value);
     camera.lookAt(value[0], value[1], value[2]);
     camera.position.set(value[0] - 5, value[1] + 10, value[2] - 5);
   }), []);
@@ -84,7 +84,7 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
       // return;
     }
 
-    position.set(10, 0, 0);
+    // position.set(10, 0, 0);
 
     // console.log('moveX', linearVelocity.get());
 
@@ -93,7 +93,7 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
     // let physicsBody = ballObject.userData.physicsBody;
     // physicsBody.setLinearVelocity( resultantImpulse );
     // linearVelocity
-    // linearVelocity.set(moveX, 0, moveZ);
+    linearVelocity.set(moveX * 20, 0, moveZ * 20);
   };
 
   return (
@@ -103,7 +103,7 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
       receiveShadow
       castShadow
       onClick={() => {
-        // setLinearVelocity([1, 0, 0], 1);
+        linearVelocity.set(1, 0, 0);
       }}
     >
       <sphereBufferGeometry attach="geometry" args={[1, 32, 32]} />
