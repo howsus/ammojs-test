@@ -14,6 +14,7 @@ const Cube: React.FC<CubeProps> = ({ onClick, ...props }: CubeProps) => {
     args: [0.5, 0.5, 0.5],
     material: {
       restitution: 0.5,
+      friction: 0.8,
     },
     ...props,
   }));
