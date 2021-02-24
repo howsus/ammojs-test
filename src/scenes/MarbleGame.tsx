@@ -5,6 +5,8 @@ import Marble from '../components/Marble';
 import Platform from '../components/Platform';
 import Physics from '../components/Physics';
 
+import MapGenerator from '../helpers/MapGenerator';
+
 const MarbleGame: React.FC = () => (
   <Canvas
     shadowMap
@@ -25,15 +27,11 @@ const MarbleGame: React.FC = () => (
       {() => (
         <>
           <Marble position={[2, 5, 0]} />
-          <Platform position={[0, 0, 0]} />
-          <Platform position={[4, 0, 0]} />
-          <Platform position={[8, 0, 0]} />
-          <Platform position={[12, 0, 0]} />
-          <Platform position={[16, 0, 0]} />
-          <Platform position={[24, 0, 0]} />
-          <Platform position={[28, 0, 0]} />
-          <Platform position={[32, 0, 0]} />
-          <Platform position={[32, 0, 4]} />
+          {
+            MapGenerator().map((tile: any) => (
+              <Platform position={tile.position} />
+            ))
+          }
         </>
       )}
     </Physics>

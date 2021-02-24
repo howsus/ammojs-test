@@ -80,8 +80,8 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
 
   useEffect(() => position.subscribe((value) => {
     camera.lookAt(value[0], value[1], value[2]);
-    // camera.position.set(value[0] - 5, value[1] + 10, value[2] - 5);
-    camera.position.set(value[0] + 5, value[1] + 10, value[2] + 5);
+    camera.position.set(value[0] - 5, value[1] + 10, value[2] - 5);
+    // camera.position.set(value[0] + 5, value[1] + 10, value[2] + 5);
   }), []);
 
   const moveBall = () => {
