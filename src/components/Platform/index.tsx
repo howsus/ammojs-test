@@ -13,6 +13,7 @@ const Platform: React.FC<PlatformProps> = ({ ...props }: PlatformProps) => {
     margin: 0.05,
     material: {
       restitution: 1,
+      friction: 0.5,
     },
     ...props,
   }));

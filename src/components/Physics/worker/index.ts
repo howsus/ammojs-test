@@ -107,7 +107,7 @@ class Engine {
     uuids.forEach((uuid, index) => {
       if (this.ammo && this.world) {
         const {
-          type: bodyType,
+          type: bodyType = 'Dynamic',
           args,
           mass = 1,
           position = [0, 0, 0],
@@ -149,6 +149,8 @@ class Engine {
         if (damping) {
           body.setDamping(damping.linearDamping, damping.angularDamping);
         }
+
+        body.setRollingFriction(10);
 
         shape.setMargin(margin);
 
@@ -315,7 +317,8 @@ onmessage = (message: MessageEvent<PhysicsEvent>) => {
     case 'setLinearVelocity': {
       const vector = engine.createVector3(event.props);
       vector.op_mul(1);
-      engine.bodies[event.uuid].setLinearVelocity(vector);
+      // engine.bodies[event.uuid].setLinearVelocity();
+      engine.bodies[event.uuid].applyImpulse(vector, vector);
       break;
     }
     default:

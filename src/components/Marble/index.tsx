@@ -14,7 +14,7 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
     args: 1,
     material: {
       restitution: 0.5,
-      friction: 1,
+      friction: 0.5,
     },
     ...props,
   }));
@@ -30,7 +30,7 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
   const handleKey = (event: KeyboardEvent, action = 0) => {
     const { keyCode } = event;
 
-    console.log('keyCode', keyCode, action);
+    // console.log('keyCode', keyCode, action);
 
     switch (keyCode) {
       case 87: // W: FORWARD
@@ -52,7 +52,7 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
         break;
     }
 
-    console.log('Object.values(moveDirection)', Object.values(moveDirection));
+    // console.log('Object.values(moveDirection)', Object.values(moveDirection));
 
     if (Math.max(...Object.values(moveDirection)) === 1) {
       moveBall();
@@ -80,8 +80,8 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
 
   useEffect(() => position.subscribe((value) => {
     camera.lookAt(value[0], value[1], value[2]);
-    camera.position.set(value[0] - 5, value[1] + 10, value[2] - 5);
-    // camera.position.set(value[0] + 5, value[1] + 10, value[2] + 5);
+    // camera.position.set(value[0] - 5, value[1] + 10, value[2] - 5);
+    camera.position.set(value[0] + 5, value[1] + 10, value[2] + 5);
   }), []);
 
   const moveBall = () => {
@@ -91,7 +91,7 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
     ];
 
     if (ref && ref.current) {
-      console.log('ref', ref.current.position);
+      // console.log('ref', ref.current.position);
 
       cameraDirectionVector = [
         ref.current.position.x - camera.position.x,
@@ -108,7 +108,7 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
         cameraDirectionVector[1] / normFactor,
       ];
 
-      console.log('cameraDirectionVector', cameraDirectionVector);
+      // console.log('cameraDirectionVector', cameraDirectionVector);
     }
 
     const scalingFactor = 1;
@@ -185,17 +185,18 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
           Math.abs(mtx[1][0]),
         ],
       );
+      if (normFactor !== 0) {
+        mtx = [
+          [mtx[0][0] / normFactor, mtx[0][1] / normFactor],
+          [mtx[1][0] / normFactor, mtx[1][1] / normFactor],
+        ];
 
-      mtx = [
-        [mtx[0][0] / normFactor, mtx[0][1] / normFactor],
-        [mtx[1][0] / normFactor, mtx[1][1] / normFactor],
-      ];
-
-      console.log('mtx', JSON.stringify(mtx), JSON.stringify(cameraDirectionVector));
-      movementDirectionVector = [
-        mtx[0][0] * cameraDirectionVector[0] + mtx[0][1] * cameraDirectionVector[1],
-        mtx[1][0] * cameraDirectionVector[0] + mtx[1][1] * cameraDirectionVector[1],
-      ];
+        // console.log('mtx', JSON.stringify(mtx), JSON.stringify(cameraDirectionVector));
+        movementDirectionVector = [
+          mtx[0][0] * cameraDirectionVector[0] + mtx[0][1] * cameraDirectionVector[1],
+          mtx[1][0] * cameraDirectionVector[0] + mtx[1][1] * cameraDirectionVector[1],
+        ];
+      }
     }
 
     const movementDirectionVectorDistance = Math.sqrt(
@@ -203,21 +204,21 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
     );
 
     movementDirectionVector = [
-      movementDirectionVector[0] / movementDirectionVectorDistance,
-      movementDirectionVector[1] / movementDirectionVectorDistance,
+      (movementDirectionVector[0] / movementDirectionVectorDistance) || 0,
+      (movementDirectionVector[1] / movementDirectionVectorDistance) || 0,
     ];
 
-    console.log('movementDirectionVector', movementDirectionVector);
+    // console.log('movementDirectionVector', movementDirectionVector);
 
-    console.log('velocity: ', Math.sqrt(
-      (movementDirectionVector[0] * 1.4) ** 2
-      + (movementDirectionVector[1] * 1.4) ** 2,
-    ));
+    // console.log('velocity: ', Math.sqrt(
+    //   (movementDirectionVector[0] * 1.4) ** 2
+    //   + (movementDirectionVector[1] * 1.4) ** 2,
+    // ));
 
     linearVelocity.set(
-      movementDirectionVector[0] * 1.4,
+      movementDirectionVector[0],
       moveY * 3,
-      movementDirectionVector[1] * 1.4,
+      movementDirectionVector[1],
     );
   };
 
