@@ -159,9 +159,14 @@ export const useBody = (
         post('unsubscribe', index, id);
       };
     };
-    const opString = (action: string, name: string) => (
-      action + type.charAt(0).toUpperCase() + name.slice(1)
-    );
+    const opString = (action: string, name: string) => {
+      const asfsafgdsf = (
+        action + name.charAt(0).toUpperCase() + name.slice(1)
+      );
+
+      console.log(asfsafgdsf);
+      return asfsafgdsf;
+    };
     const makeVec = (name: string, index?: number) => ({
       set: (x: number, y: number, z: number) => post(opString('set', name), index, [x, y, z]),
       copy: ({ x, y, z }: THREE.Vector3 | THREE.Euler) => post(opString('set', name), index, [x, y, z]),
@@ -171,7 +176,7 @@ export const useBody = (
     const createApi = (index?: number): WorkerApi => ({
       position: makeVec('position', index),
       rotation: makeVec('quaternion', index),
-      linearVelocity: makeVec('velocity', index),
+      linearVelocity: makeVec('linearVelocity', index),
       angularVelocity: makeVec('angularVelocity', index),
       linearFactor: makeVec('linearFactor', index),
       angularFactor: makeVec('angularFactor', index),
