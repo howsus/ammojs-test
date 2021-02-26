@@ -7,12 +7,13 @@ export type PlatformProps = {
 };
 
 const Platform: React.FC<PlatformProps> = ({ ...props }: PlatformProps) => {
-  const [ref] = useBox(() => ({
+  const [ref, api] = useBox(() => ({
     type: 'Static',
     args: [2, 0.25, 2],
     margin: 0.05,
     material: {
       restitution: 1,
+      rollingFriction: 10,
     },
     ...props,
   }));

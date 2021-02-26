@@ -7,11 +7,12 @@ import React, {
 import { Buffers, context } from './setup';
 
 import {
+  Shape,
   AtomicProps,
-  ShapeType,
   BodyProps,
   BoxProps,
   SphereProps,
+  SubscribableValues,
 } from './worker/types';
 
 export type BodyFn = (index: number) => BodyProps
@@ -20,32 +21,38 @@ export type SphereFn = (index: number) => SphereProps;
 
 type ArgFn = (props: unknown) => unknown;
 
-type WorkerVec = {
-  set: (x: number, y: number, z: number) => void
-  copy: ({ x, y, z }: THREE.Vector3 | THREE.Euler) => void
-  subscribe: (callback: (value: number[]) => void) => void
+type WorkerVec<T extends keyof SubscribableValues> = {
+  set: (value: SubscribableValues[T]) => void
+  subscribe: (callback: (value: SubscribableValues[T]) => void) => void
 }
 
 export type WorkerProps<T> = {
   [K in keyof T]: {
-    set: (value: T[K]) => void
-    subscribe: (callback: (value: T[K]) => void) => () => void
+    set: (value: NonNullable<T[K]>) => void
+    subscribe: (callback: (value: NonNullable<T[K]>) => void) => () => void
   }
 }
+
 export type WorkerApi = WorkerProps<AtomicProps> & {
-  position: WorkerVec
-  rotation: WorkerVec
-  linearVelocity: WorkerVec
-  angularVelocity: WorkerVec
-  linearFactor: WorkerVec
-  angularFactor: WorkerVec
-  // applyForce: (force: number[], worldPoint: number[]) => void
-  // applyImpulse: (impulse: number[], worldPoint: number[]) => void
-  // applyLocalForce: (force: number[], localPoint: number[]) => void
-  // applyLocalImpulse: (impulse: number[], localPoint: number[]) => void
+  position: WorkerVec<'position'>;
+  rotation: WorkerVec<'rotation'>;
+  linearVelocity: WorkerVec<'linearVelocity'>;
+  angularVelocity: WorkerVec<'angularVelocity'>;
+  linearFactor: WorkerVec<'linearFactor'>;
+  angularFactor: WorkerVec<'angularFactor'>;
+  applyForce: (
+    force: [x: number, y: number, z: number],
+    worldPoint: [x: number, y: number, z: number],
+  ) => void
+  applyImpulse: (
+    impulse: [x: number, y: number, z: number],
+    worldPoint: [x: number, y: number, z: number],
+  ) => void
+  applyCentralLocalForce: (force: [x: number, y: number, z: number]) => void
+  applyCentralImpulse: (impulse: [x: number, y: number, z: number]) => void
 }
 
-type PublicApi = WorkerApi & { at: (index: number) => WorkerApi }
+type PublicApi = WorkerApi & { at: (index: number) => WorkerApi };
 
 export type Api = [React.MutableRefObject<THREE.Object3D | undefined>, PublicApi];
 
@@ -67,7 +74,7 @@ function apply(object: THREE.Object3D, index: number, buffers: Buffers) {
 let subscriptionGuid = 0;
 
 export const useBody = (
-  type: ShapeType,
+  type: Shape,
   fn: BodyFn,
   argFn: ArgFn,
   fwdRef?: React.MutableRefObject<THREE.Object3D>,
@@ -108,16 +115,18 @@ export const useBody = (
     });
 
     postMessage({
-      operation: 'addBodies',
-      type,
-      uuid,
-      props,
+      type: 'addBodies',
+      props: {
+        type,
+        uuids: uuid,
+        props,
+      },
     });
 
     return () => {
       props.forEach((_, index) => {
         delete refs[uuid[index]];
-        postMessage({ operation: 'removeBodies', uuid });
+        postMessage({ type: 'removeBodies', props: { uuids: uuid } });
       });
     };
   }, []);
@@ -142,44 +151,73 @@ export const useBody = (
 
   const api = useMemo(() => {
     const getUUID = (index?: number) => (index ? `${ref.current.uuid}/${index}` : ref.current.uuid);
-    const post = (operation: any, index?: number, props?: any) => ref.current && postMessage({
-      operation,
-      uuid: getUUID(index),
-      props,
-    });
-    const subscribe = (name: string, index?: number) => (
-      callback: (value: any) => void,
-    ) => {
-      subscriptionGuid += 1;
-      const id = subscriptionGuid;
-      subscriptions[id] = callback;
-      post('subscribe', index, { id, type: name });
-      return () => {
-        delete subscriptions[id];
-        post('unsubscribe', index, id);
-      };
-    };
-    const opString = (action: string, name: string) => {
-      const asfsafgdsf = (
-        action + name.charAt(0).toUpperCase() + name.slice(1)
-      );
 
-      console.log(asfsafgdsf);
-      return asfsafgdsf;
-    };
-    const makeVec = (name: string, index?: number) => ({
-      set: (x: number, y: number, z: number) => post(opString('set', name), index, [x, y, z]),
-      copy: ({ x, y, z }: THREE.Vector3 | THREE.Euler) => post(opString('set', name), index, [x, y, z]),
-      subscribe: subscribe(name, index),
-    });
+    function makeType<T extends string>(name: T): `set${Capitalize<keyof SubscribableValues>}` {
+      return `set${name.charAt(0).toUpperCase()}${name.slice(1)}` as `set${Capitalize<keyof SubscribableValues>}`;
+    }
+
+    function make<
+      T extends keyof SubscribableValues,
+    >(name: T, index?: number) {
+      return {
+        set: (value: SubscribableValues[T]) => ref.current && postMessage({
+          type: makeType(name),
+          props: { value: value as never, uuid: getUUID(index) },
+        }),
+        subscribe: (
+          callback: (value: SubscribableValues[T]) => void,
+        ) => {
+          subscriptionGuid += 1;
+          const id = subscriptionGuid;
+          subscriptions[id] = callback as never;
+          postMessage({ type: 'subscribe', props: { id, name, uuid: getUUID(index) } });
+          return () => {
+            delete subscriptions[id];
+            postMessage({ type: 'unsubscribe', props: { id, name, uuid: getUUID(index) } });
+          };
+        },
+      };
+    }
 
     const createApi = (index?: number): WorkerApi => ({
-      position: makeVec('position', index),
-      rotation: makeVec('quaternion', index),
-      linearVelocity: makeVec('linearVelocity', index),
-      angularVelocity: makeVec('angularVelocity', index),
-      linearFactor: makeVec('linearFactor', index),
-      angularFactor: makeVec('angularFactor', index),
+      position: make('position', index),
+      rotation: make('rotation', index),
+      linearVelocity: make('linearVelocity', index),
+      angularVelocity: make('angularVelocity', index),
+      linearFactor: make('linearFactor', index),
+      angularFactor: make('angularFactor', index),
+      friction: make('friction', index),
+      restitution: make('restitution', index),
+      rollingFriction: make('rollingFriction', index),
+      linearDamping: make('linearDamping', index),
+      angularDamping: make('angularDamping', index),
+      margin: make('margin', index),
+      applyForce: (
+        force: [x: number, y: number, z: number],
+        worldPoint: [x: number, y: number, z: number],
+      ) => ref.current && postMessage({
+        type: 'applyForce',
+        props: { value: [force, worldPoint], uuid: getUUID(index) },
+      }),
+      applyImpulse: (
+        force: [x: number, y: number, z: number],
+        worldPoint: [x: number, y: number, z: number],
+      ) => ref.current && postMessage({
+        type: 'applyImpulse',
+        props: { value: [force, worldPoint], uuid: getUUID(index) },
+      }),
+      applyCentralLocalForce: (
+        force: [x: number, y: number, z: number],
+      ) => ref.current && postMessage({
+        type: 'applyCentralLocalForce',
+        props: { value: [force, [0, 0, 0]], uuid: getUUID(index) },
+      }),
+      applyCentralImpulse: (
+        force: [x: number, y: number, z: number],
+      ) => ref.current && postMessage({
+        type: 'applyCentralImpulse',
+        props: { value: [force, [0, 0, 0]], uuid: getUUID(index) },
+      }),
     });
 
     const cache: { [index: number]: WorkerApi } = {};

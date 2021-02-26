@@ -1,66 +1,87 @@
-import {
-  ShapeType,
-  BodyProps,
-} from './types';
+import * as Types from './types';
 
-export interface InitialEvent {
-  operation: 'init';
+export interface EngineEvent {
+  type: string;
+  props: unknown;
+}
+
+export interface InitializeEvent extends EngineEvent {
+  type: 'init';
   props: {
-    dynamics?: 'SoftRigid' | 'Discrete';
-    gravity?: [number, number, number];
+    wasmPath: string;
+    dynamics: Types.Dynamics;
+    gravity: [number, number, number];
+    broadphase: Types.SAPBroadphase | Types.NaiveBroadphase;
   }
 }
 
-export interface StepEvent {
-  operation: 'step';
-  positions: Float32Array;
-  quaternions: Float32Array;
-}
-
-export interface AddBodiesEvent {
-  operation: 'addBodies';
-  uuid: string[];
-  type: ShapeType;
-  props: BodyProps[];
-}
-
-export interface RemoveBodiesEvent {
-  operation: 'removeBodies';
-  uuid: string[];
-}
-
-export interface VectorModifierEvent {
-  operation:
-    | 'setPosition'
-    | 'setQuaternion'
-    | 'setLinearVelocity'
-    | 'setAngularVelocity'
-    | 'setLinearFactor'
-    | 'setAngularFactor';
-  uuid: string;
-  props: [number, number, number];
-}
-
-export interface SubscribeEvent {
-  operation: 'subscribe';
-  uuid: string;
+export interface AddBodiesEvent extends EngineEvent {
+  type: 'addBodies';
   props: {
+    uuids: string[];
+    type: Types.Shape;
+    props: Types.BodyProps[];
+  }
+}
+
+export interface RemoveBodiesEvent extends EngineEvent {
+  type: 'removeBodies';
+  props: {
+    uuids: string[];
+  }
+}
+
+export interface StepEvent extends EngineEvent {
+  type: 'step';
+  props: {
+    positions: Float32Array;
+    quaternions: Float32Array;
+  }
+}
+
+export type ChangeEvent = {
+  [P in keyof Types.SubscribableValues]: {
+    type: `set${Capitalize<P>}`,
+    props: {
+      uuid: string;
+      value: Types.SubscribableValues[P];
+    }
+  }
+}[keyof Types.SubscribableValues];
+
+export type ApplyEvent = {
+  type: 'applyForce' | 'applyImpulse' | 'applyCentralLocalForce' | 'applyCentralImpulse';
+  props: {
+    uuid: string;
+    value: [[x: number, y: number, z: number], [x: number, y: number, z: number]];
+  }
+};
+export interface SubscribeEvent extends EngineEvent {
+  type: 'subscribe';
+  props: {
+    name: keyof Types.SubscribableValues;
     id: number;
-    type: string;
+    uuid: string;
   }
 }
 
-export interface UnsubscribeEvent {
-  operation: 'unsubscribe';
-  uuid: string;
-  props: number;
+export interface UnsubscribeEvent extends EngineEvent {
+  type: 'unsubscribe';
+  props: {
+    name: keyof Types.SubscribableValues;
+    id: number;
+    uuid: string;
+  }
 }
 
-export type PhysicsEvent =
-  | InitialEvent
-  | StepEvent
+type Events =
+  | InitializeEvent
   | AddBodiesEvent
   | RemoveBodiesEvent
+  | StepEvent
+  | ChangeEvent
+  | ApplyEvent
   | SubscribeEvent
-  | UnsubscribeEvent
-  | VectorModifierEvent;
+  | UnsubscribeEvent;
+
+export default Events;

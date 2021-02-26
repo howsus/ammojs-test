@@ -10,7 +10,7 @@ const MarbleGame: React.FC = () => (
     shadowMap
     style={{ width: '100%', height: '100vh' }}
     camera={{
-      position: [0, 0, 0], fov: 65, near: 2, far: 60,
+      position: [-10, 10, 10], fov: 65, near: 2, far: 60,
     }}
   >
     <ambientLight />
@@ -21,21 +21,17 @@ const MarbleGame: React.FC = () => (
       shadow-mapSize-width={1024}
       shadow-mapSize-height={1024}
     />
-    <Physics>
-      {() => (
-        <>
-          <Marble position={[2, 5, 0]} />
-          <Platform position={[0, 0, 0]} />
-          <Platform position={[4, 0, 0]} />
-          <Platform position={[8, 0, 0]} />
-          <Platform position={[12, 0, 0]} />
-          <Platform position={[16, 0, 0]} />
-          <Platform position={[24, 0, 0]} />
-          <Platform position={[28, 0, 0]} />
-          <Platform position={[32, 0, 0]} />
-          <Platform position={[32, 0, 4]} />
-        </>
-      )}
+    <Physics wasmPath="/ammo.wasm" dynamics="Discrete" gravity={[0, -9.81, 0]} broadphase={{ type: 'Naive' }}>
+      <Marble position={[2, 5, 0]} />
+      <Platform position={[0, 0, 0]} />
+      <Platform position={[4, 0, 0]} />
+      <Platform position={[8, 0, 0]} />
+      <Platform position={[12, 0, 0]} />
+      <Platform position={[16, 0, 0]} />
+      <Platform position={[24, 0, 0]} />
+      <Platform position={[28, 0, 0]} />
+      <Platform position={[32, 0, 0]} />
+      <Platform position={[32, 0, 4]} />
     </Physics>
   </Canvas>
 );

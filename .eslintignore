@@ -1,1 +1,2 @@
-src/components/Ammo/ammo.js
+src/components/Physics/ammo/ammo.js
+src/components/Physics/ammo/ammo.d.ts
