@@ -11,7 +11,29 @@ export interface FrameEvent {
   }
 }
 
+export interface CollisionEvent {
+  type: 'collision';
+  props: {
+    target: string;
+    body: string;
+    distance: number;
+    contact: {
+      // ni: number[];
+      // ri: number[];
+      // rj: number[];
+      impactVelocity: number;
+    };
+    collisionFilters: {
+      bodyFilterGroup: number;
+      bodyFilterMask: number;
+      targetFilterGroup: number;
+      targetFilterMask: number;
+    };
+  };
+}
+
 export type WorkerEvent =
-  | FrameEvent;
+  | FrameEvent
+  | CollisionEvent;
 
 export default WorkerEvent;

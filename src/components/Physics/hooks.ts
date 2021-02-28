@@ -11,13 +11,18 @@ import {
   AtomicProps,
   BodyProps,
   BoxProps,
+  PlaneProps,
   SphereProps,
+  CylinderProps,
   SubscribableValues,
 } from './worker/types';
+import { AddBodiesEvent } from './worker/events';
 
 export type BodyFn = (index: number) => BodyProps
 export type BoxFn = (index: number) => BoxProps;
+export type PlaneFn = (index: number) => PlaneProps;
 export type SphereFn = (index: number) => SphereProps;
+export type CylinderFn = (index: number) => CylinderProps;
 
 type ArgFn = (props: unknown) => unknown;
 
@@ -61,7 +66,7 @@ const temp = new Object3D();
 function prepare(object: Object3D, props: BodyProps, argFn: ArgFn) {
   object.position.set(...((props.position || [0, 0, 0]) as [number, number, number]));
   object.rotation.set(...((props.rotation || [0, 0, 0]) as [number, number, number]));
-  return { ...props, args: argFn(props.args) };
+  return { ...props, onCollide: Boolean(props.onCollide), args: argFn(props.args) };
 }
 
 function apply(object: THREE.Object3D, index: number, buffers: Buffers) {
@@ -82,7 +87,7 @@ export const useBody = (
   const localRef = useRef<THREE.Object3D>((null as unknown) as THREE.Object3D);
   const ref = fwdRef || localRef;
   const {
-    postMessage, bodies, buffers, refs, subscriptions,
+    postMessage, bodies, buffers, refs, subscriptions, events,
   } = useContext(context);
 
   useLayoutEffect(() => {
@@ -93,24 +98,32 @@ export const useBody = (
     const object = ref.current;
 
     let uuid = [object.uuid];
-    let props: BodyProps[];
+    let props: AddBodiesEvent['props']['props'];
 
     if (object instanceof InstancedMesh) {
       object.instanceMatrix.setUsage(DynamicDrawUsage);
       uuid = new Array(object.count).fill(0).map((_, i) => `${object.uuid}/${i}`);
 
       props = uuid.map((id, i) => {
-        const preparedProps = prepare(temp, fn(i), argFn);
+        const objectProps = fn(i);
+        const preparedProps = prepare(temp, objectProps, argFn);
+        if (objectProps.onCollide) {
+          events[uuid[i]] = objectProps.onCollide;
+        }
         temp.updateMatrix();
         object.setMatrixAt(i, temp.matrix);
         object.instanceMatrix.needsUpdate = true;
         return preparedProps;
       });
     } else {
-      props = [prepare(object, fn(0), argFn)];
+      const objectProps = fn(0);
+      if (objectProps.onCollide) {
+        events[uuid[0]] = objectProps.onCollide;
+      }
+      props = [prepare(object, objectProps, argFn)];
     }
 
-    props.forEach((_, index) => {
+    props.forEach((objectProps, index) => {
       refs[uuid[index]] = object;
     });
 
@@ -126,8 +139,9 @@ export const useBody = (
     return () => {
       props.forEach((_, index) => {
         delete refs[uuid[index]];
-        postMessage({ type: 'removeBodies', props: { uuids: uuid } });
+        if (_.onCollide) delete events[uuid[index]];
       });
+      postMessage({ type: 'removeBodies', props: { uuids: uuid } });
     };
   }, []);
 
@@ -242,7 +256,24 @@ export const useBox = (
   fwdRef?: React.MutableRefObject<THREE.Object3D>,
 ): Api => useBody('Box', fn, (args) => args || [1, 1, 1], fwdRef);
 
+export const usePlane = (
+  fn: PlaneFn,
+  fwdRef?: React.MutableRefObject<THREE.Object3D>,
+): Api => useBody('Plane', fn, (args) => args || [1, 1, 1], fwdRef);
+
 export const useSphere = (
   fn: SphereFn,
   fwdRef?: React.MutableRefObject<THREE.Object3D>,
 ): Api => useBody('Sphere', fn, (radius) => radius ?? 1 as number, fwdRef);
+
+export const useCylinder = (
+  fn: CylinderFn,
+  fwdRef?: React.MutableRefObject<THREE.Object3D>,
+): Api => useBody('Cylinder', fn, (args) => args || [1, 1, 1], fwdRef);
+
+export type {
+  BoxProps,
+  PlaneProps,
+  SphereProps,
+  CylinderProps,
+};

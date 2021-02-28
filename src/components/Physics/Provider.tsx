@@ -13,6 +13,7 @@ import Ammo from 'worker-loader!./worker'; // eslint-disable-line import/no-webp
 import {
   context,
   Refs,
+  Events,
   Buffers,
   Subscriptions,
   ProviderContext,
@@ -33,6 +34,7 @@ const Provider: React.FC<ProviderProps> = ({
   const { gl, invalidate } = useThree();
   const [worker] = useState<Worker>(() => new Ammo<Worker>());
   const [refs] = useState<Refs>({});
+  const [events] = useState<Events>({});
   const [buffers] = useState<Buffers>(() => ({
     positions: new Float32Array(size * 3),
     quaternions: new Float32Array(size * 4),
@@ -101,6 +103,13 @@ const Provider: React.FC<ProviderProps> = ({
         case 'frame':
           onFrame(e.data.props);
           break;
+        case 'collision':
+          events[e.data.props.target]({
+            ...e.data.props,
+            target: refs[e.data.props.target],
+            body: refs[e.data.props.body],
+          });
+          break;
         default:
           break;
       }
@@ -120,6 +129,7 @@ const Provider: React.FC<ProviderProps> = ({
     postMessage,
     bodies,
     refs,
+    events,
     buffers,
     subscriptions,
   }), [
@@ -129,6 +139,7 @@ const Provider: React.FC<ProviderProps> = ({
     refs,
     buffers,
     subscriptions,
+    events,
   ]);
 
   return (

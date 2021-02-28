@@ -20,7 +20,7 @@ export interface AddBodiesEvent extends EngineEvent {
   props: {
     uuids: string[];
     type: Types.Shape;
-    props: Types.BodyProps[];
+    props: (Omit<Types.BodyProps, 'onCollide'> & { onCollide?: boolean })[];
   }
 }
 

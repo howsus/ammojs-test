@@ -1,6 +1,11 @@
 export default Ammo;
 declare function Ammo<T>(target?: T): Promise<T & typeof Ammo>;
 declare namespace Ammo {
+  function wrapPointer(a: unknown, b?: unknown): unknown;
+  function castObject<B>(a: unknown, b: unknown): B;
+  function compare(a: unknown, b?: unknown): unknown;
+  function getPointer<A extends unknown>(a: unknown): a;
+
   function destroy(obj: any): void;
   class btIDebugDraw {
     drawLine(from: btVector3, to: btVector3, color: btVector3): void;
@@ -175,6 +180,13 @@ declare namespace Ammo {
     set_m_graphicsWorldTrans(m_graphicsWorldTrans: btTransform): void;
   }
   class btCollisionObject {
+    ['userData']: {
+      uuid: string;
+      onCollide?: boolean;
+      collisionFilterGroup?: number;
+      collisionFilterMask?: number;
+    };
+
     setAnisotropicFriction(anisotropicFriction: btVector3, frictionMode: number): void;
 
     getCollisionShape(): btCollisionShape;

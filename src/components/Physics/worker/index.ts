@@ -7,9 +7,10 @@ import Ammo from '../ammo/ammo';
 import WorkerEvent, * as Events from './events';
 import {
   Shape,
-  BodyProps,
   BoxProps,
+  PlaneProps,
   SphereProps,
+  CylinderProps,
   SubscribableValues,
 } from './types';
 
@@ -101,7 +102,57 @@ async function initEngine(initProps: Events.InitializeEvent['props']) {
       bodiesNeedSyncing = false;
     }
 
+    getCollides();
+
     return [message, [nextPositions.buffer, nextQuaternions.buffer]];
+  }
+
+  function getCollides() {
+    const dispatcher = physicsWorld.getDispatcher();
+    const numManifolds = dispatcher.getNumManifolds();
+
+    for (let i = 0; i < numManifolds; i += 1) {
+      const contactManifold = dispatcher.getManifoldByIndexInternal(i);
+
+      const rb0 = ammo.castObject<Ammo.btRigidBody>(contactManifold.getBody0(), ammo.btRigidBody);
+      const rb1 = ammo.castObject<Ammo.btRigidBody>(contactManifold.getBody1(), ammo.btRigidBody);
+
+      const body = bodies[rb0.userData.uuid];
+      const target = bodies[rb1.userData.uuid];
+
+      const numContacts = contactManifold.getNumContacts();
+      if (target.userData.onCollide) {
+        for (let j = 0; j < numContacts; j += 1) {
+          const contactPoint = contactManifold.getContactPoint(j);
+          const distance = contactPoint.getDistance();
+
+          // let velocity0 = body.getLinearVelocity();
+          // let velocity1 = target.getLinearVelocity();
+          // let worldPos0 = contactPoint.get_m_positionWorldOnA();
+          // let worldPos1 = contactPoint.get_m_positionWorldOnB();
+          // let localPos0 = contactPoint.get_m_localPointA();
+          // let localPos1 = contactPoint.get_m_localPointB();
+
+          postMessage({
+            type: 'collision',
+            props: {
+              distance,
+              target: target.userData.uuid,
+              body: body.userData.uuid,
+              contact: {
+                impactVelocity: contactPoint.getAppliedImpulse(),
+              },
+              collisionFilters: {
+                bodyFilterGroup: 0,
+                bodyFilterMask: 0,
+                targetFilterGroup: 0,
+                targetFilterMask: 0,
+              },
+            },
+          });
+        }
+      }
+    }
   }
 
   function addBodies(props: Events.AddBodiesEvent['props']): void {
@@ -141,7 +192,19 @@ async function initEngine(initProps: Events.InitializeEvent['props']) {
       if (bodyProps.angularFactor) {
         body.setAngularFactor(new ammo.btVector3(...bodyProps.angularFactor));
       }
-      physicsWorld.addRigidBody(body);
+      physicsWorld.addRigidBody(
+        body,
+        bodyProps.collisionFilterGroup || 1,
+        bodyProps.collisionFilterMask || 1,
+      );
+
+      body.userData = {
+        uuid,
+        onCollide: bodyProps.onCollide,
+        collisionFilterGroup: bodyProps.collisionFilterGroup,
+        collisionFilterMask: bodyProps.collisionFilterMask,
+      };
+
       bodies[uuid] = body;
     });
     bodiesNeedSyncing = true;
@@ -198,7 +261,7 @@ async function initEngine(initProps: Events.InitializeEvent['props']) {
     return world;
   }
 
-  function createRigidBody(shape: Shape, props: BodyProps): Ammo.btRigidBody {
+  function createRigidBody(shape: Shape, props: Events.AddBodiesEvent['props']['props'][0]): Ammo.btRigidBody {
     const transform = new ammo.btTransform();
     transform.setIdentity();
     transform.setOrigin(new ammo.btVector3(
@@ -232,10 +295,31 @@ async function initEngine(initProps: Events.InitializeEvent['props']) {
 
   function createShape(shape: Shape, args: unknown) {
     switch (shape) {
-      case 'Box':
-        return new ammo.btBoxShape(new ammo.btVector3(...(args as BoxProps['args'] || [0, 0, 0])));
+      case 'Box': {
+        const vector = args as BoxProps['args'];
+        return new ammo.btBoxShape(new ammo.btVector3(
+          ((vector && vector[0]) || 0) * 0.5,
+          ((vector && vector[1]) || 0) * 0.5,
+          ((vector && vector[2]) || 0) * 0.5,
+        ));
+      }
       case 'Sphere':
         return new ammo.btSphereShape(args as SphereProps['args'] || 1);
+      case 'Plane':
+        return new ammo.btStaticPlaneShape(
+          new ammo.btVector3(...(args as PlaneProps['args'] || [0, 1, 0])),
+          0,
+        );
+      case 'Cylinder': {
+        const vector = args as CylinderProps['args'];
+        return new ammo.btCylinderShape(
+          new ammo.btVector3(
+            (vector && vector[0]) || 0,
+            ((vector && vector[1]) || 0) * 0.5,
+            (vector && vector[2]) || 0,
+          ),
+        );
+      }
       default:
         throw new Error('Unknown Shape Type');
     }
@@ -303,8 +387,11 @@ async function initEngine(initProps: Events.InitializeEvent['props']) {
         break;
       case 'setPosition': {
         bodies[event.props.uuid].getMotionState().getWorldTransform(transformAux1);
+        bodies[event.props.uuid].setLinearVelocity(
+          new ammo.btVector3(0, 0, 0),
+        );
         transformAux1.setOrigin(new ammo.btVector3(...event.props.value));
-        bodies[event.props.uuid].getMotionState().setWorldTransform(transformAux1);
+        bodies[event.props.uuid].setWorldTransform(transformAux1);
         break;
       }
       case 'setRotation': {

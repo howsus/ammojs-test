@@ -10,13 +10,13 @@ export type MarbleProps = {
 const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
   const { camera } = useThree();
   const [ref, { position, applyImpulse }] = useSphere(() => ({
+    type: 'Dynamic',
     mass: 1,
     args: 1,
-    type: 'Dynamic',
-    restitution: 0.5,
-    friction: 1,
-    rollingFriction: 10,
-    linearDamping: 0.1,
+    material: {
+      restitution: 0.5,
+      friction: 0.5,
+    },
     ...props,
   }));
 
@@ -29,27 +29,31 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
   };
 
   const handleKey = (event: KeyboardEvent, action = 0) => {
-    const { key } = event;
+    const { keyCode } = event;
 
-    switch (key) {
-      case 'w': // W: FORWARD
+    // console.log('keyCode', keyCode, action);
+
+    switch (keyCode) {
+      case 87: // W: FORWARD
         moveDirection.forward = action;
         break;
-      case 's': // S: BACKWARD
+      case 83: // S: BACKWARD
         moveDirection.backward = action;
         break;
-      case 'a': // A: LEFT
+      case 65: // A: LEFT
         moveDirection.left = action;
         break;
-      case 'd': // D: RIGHT
+      case 68: // D: RIGHT
         moveDirection.right = action;
         break;
-      case ' ': // SPACE: UPWARD
+      case 32: // SPACE: UPWARD
         moveDirection.upward = action;
         break;
       default:
         break;
     }
+
+    // console.log('Object.values(moveDirection)', Object.values(moveDirection));
 
     if (Math.max(...Object.values(moveDirection)) === 1) {
       moveBall();
@@ -78,6 +82,7 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
   useEffect(() => position.subscribe((value) => {
     camera.lookAt(value[0], value[1], value[2]);
     camera.position.set(value[0] - 5, value[1] + 10, value[2] - 5);
+    // camera.position.set(value[0] + 5, value[1] + 10, value[2] + 5);
   }), []);
 
   const moveBall = () => {
@@ -87,6 +92,8 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
     ];
 
     if (ref && ref.current) {
+      // console.log('ref', ref.current.position);
+
       cameraDirectionVector = [
         ref.current.position.x - camera.position.x,
         ref.current.position.z - camera.position.z,
@@ -101,8 +108,11 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
         cameraDirectionVector[0] / normFactor,
         cameraDirectionVector[1] / normFactor,
       ];
+
+      // console.log('cameraDirectionVector', cameraDirectionVector);
     }
 
+    const scalingFactor = 1;
     const moveX = moveDirection.right - moveDirection.left;
     const moveZ = moveDirection.backward - moveDirection.forward;
     const moveY = moveDirection.upward;
@@ -111,14 +121,106 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
       return;
     }
 
-    applyImpulse(
-      [moveZ * -1, 0, moveX],
-      [0, 0, 0],
+    let movementDirectionVector = [0, 0];
+
+    let mtx = [
+      [0, 0],
+      [0, 0],
+    ];
+
+    if (moveX > 0) { // D
+      const D = [
+        [-1, 0],
+        [0, 1],
+      ];
+
+      mtx = [
+        [mtx[0][0] + D[0][0], mtx[1][0] + D[1][0]],
+        [mtx[1][0] + D[1][0], mtx[1][1] + D[1][1]],
+      ];
+    }
+
+    if (moveX < 0) { // A
+      const W = [
+        [1, 0],
+        [0, -1],
+      ];
+
+      mtx = [
+        [mtx[0][0] + W[0][0], mtx[1][0] + W[1][0]],
+        [mtx[1][0] + W[1][0], mtx[1][1] + W[1][1]],
+      ];
+    }
+
+    if (moveZ > 0) { // S
+      const W = [
+        [-1, 0],
+        [0, -1],
+      ];
+
+      mtx = [
+        [mtx[0][0] + W[0][0], mtx[1][0] + W[1][0]],
+        [mtx[1][0] + W[1][0], mtx[1][1] + W[1][1]],
+      ];
+    }
+
+    if (moveZ < 0) { // W
+      const W = [
+        [1, 0],
+        [0, 1],
+      ];
+
+      mtx = [
+        [mtx[0][0] + W[0][0], mtx[1][0] + W[1][0]],
+        [mtx[1][0] + W[1][0], mtx[1][1] + W[1][1]],
+      ];
+    }
+
+    if (mtx !== null) {
+      // Normalize mtx
+      const normFactor = Math.max(
+        ...[
+          Math.abs(mtx[0][0]),
+          Math.abs(mtx[0][1]),
+          Math.abs(mtx[1][1]),
+          Math.abs(mtx[1][0]),
+        ],
+      );
+      if (normFactor !== 0) {
+        mtx = [
+          [mtx[0][0] / normFactor, mtx[0][1] / normFactor],
+          [mtx[1][0] / normFactor, mtx[1][1] / normFactor],
+        ];
+
+        // console.log('mtx', JSON.stringify(mtx), JSON.stringify(cameraDirectionVector));
+        movementDirectionVector = [
+          mtx[0][0] * cameraDirectionVector[0] + mtx[0][1] * cameraDirectionVector[1],
+          mtx[1][0] * cameraDirectionVector[0] + mtx[1][1] * cameraDirectionVector[1],
+        ];
+      }
+    }
+
+    const movementDirectionVectorDistance = Math.sqrt(
+      movementDirectionVector[0] ** 2 + movementDirectionVector[1] ** 2,
     );
 
-    // if (moveY) {
-    //   applyForce([0, moveY * 500, 0], [0, 0, 0]);
-    // }
+    movementDirectionVector = [
+      (movementDirectionVector[0] / movementDirectionVectorDistance) || 0,
+      (movementDirectionVector[1] / movementDirectionVectorDistance) || 0,
+    ];
+
+    // console.log('movementDirectionVector', movementDirectionVector);
+
+    // console.log('velocity: ', Math.sqrt(
+    //   (movementDirectionVector[0] * 1.4) ** 2
+    //   + (movementDirectionVector[1] * 1.4) ** 2,
+    // ));
+
+    applyImpulse([
+      movementDirectionVector[0],
+      moveY * 3,
+      movementDirectionVector[1],
+    ], [0, 0, 0]);
   };
 
   return (

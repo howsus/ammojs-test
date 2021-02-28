@@ -1,3 +1,5 @@
+import { CollisionEvent } from '../setup';
+
 export type Dynamics = 'Discrete' | 'Soft';
 
 export type Gravity = [x: number, y: number, z: number];
@@ -18,7 +20,9 @@ export type NaiveBroadphase = {
 
 export type Shape =
   | 'Box'
-  | 'Sphere';
+  | 'Sphere'
+  | 'Plane'
+  | 'Cylinder';
 
 export type AtomicProps = {
   mass?: number;
@@ -27,6 +31,8 @@ export type AtomicProps = {
   rollingFriction?: number;
   linearDamping?: number;
   angularDamping?: number;
+  collisionFilterGroup?: number;
+  collisionFilterMask?: number;
   margin?: number;
 };
 
@@ -39,9 +45,14 @@ export type BodyProps = AtomicProps & {
   linearFactor?: [x: number, y: number, z: number];
   angularFactor?: [x: number, y: number, z: number];
   type: BodyType;
+  onCollide?: (e: CollisionEvent) => void;
 }
 
 export type BoxProps = BodyProps & { args?: [x: number, y: number, z: number] };
+
+export type PlaneProps = BodyProps & { args?: [x: number, y: number, z: number] };
+
+export type CylinderProps = BodyProps & { args?: [radius: number, height: number, radius: number] };
 
 export type SphereProps = BodyProps & {
   args?: number;
