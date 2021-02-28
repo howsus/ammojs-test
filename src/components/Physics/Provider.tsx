@@ -13,14 +13,16 @@ import Ammo from 'worker-loader!./worker'; // eslint-disable-line import/no-webp
 import {
   context,
   Refs,
+  Events,
   Buffers,
   Subscriptions,
   ProviderContext,
 } from './setup';
-import { PhysicsEvent, InitialEvent } from './worker/events';
+import WorkerEvent, { InitializeEvent } from './worker/events';
+import ProviderEvent, { FrameEvent } from './events';
 
-export type ProviderProps = InitialEvent['props'] & {
-  children: () => React.ReactNode;
+export type ProviderProps = InitializeEvent['props'] & {
+  children: React.ReactNode;
   size?: number;
 };
 
@@ -30,9 +32,9 @@ const Provider: React.FC<ProviderProps> = ({
   ...props
 }: ProviderProps) => {
   const { gl, invalidate } = useThree();
-  const [initialized, setInitialized] = useState(false);
   const [worker] = useState<Worker>(() => new Ammo<Worker>());
   const [refs] = useState<Refs>({});
+  const [events] = useState<Events>({});
   const [buffers] = useState<Buffers>(() => ({
     positions: new Float32Array(size * 3),
     quaternions: new Float32Array(size * 4),
@@ -41,7 +43,7 @@ const Provider: React.FC<ProviderProps> = ({
   const bodies = useRef<{ [uuid: string]: number }>({});
 
   const postMessage = useCallback(
-    (event: PhysicsEvent, transfer?: Transferable[]) => (transfer
+    (event: WorkerEvent, transfer?: Transferable[]) => (transfer
       ? worker.postMessage(event, transfer)
       : worker.postMessage(event)),
     [worker],
@@ -51,7 +53,13 @@ const Provider: React.FC<ProviderProps> = ({
     () => () => {
       if (buffers.positions.byteLength !== 0 && buffers.quaternions.byteLength !== 0) {
         postMessage(
-          { operation: 'step', ...buffers },
+          {
+            type: 'step',
+            props: {
+              positions: buffers.positions,
+              quaternions: buffers.quaternions,
+            },
+          },
           [buffers.positions.buffer, buffers.quaternions.buffer],
         );
       }
@@ -71,24 +79,17 @@ const Provider: React.FC<ProviderProps> = ({
   });
 
   useEffect(() => {
-    const onLoaded = () => {
-      postMessage({
-        operation: 'init',
-        props,
-      });
-      loop();
-    };
-
-    const onFrame = (data: any) => {
+    const onFrame = (data: FrameEvent['props']) => {
       if (data.bodies) {
         bodies.current = data.bodies.reduce(
-          (acc: any, id: any) => ({ ...acc, [id]: data.bodies.indexOf(id) }),
+          (acc, id: string) => ({ ...acc, [id]: data.bodies?.indexOf(id) }),
           {},
         );
       }
       buffers.positions = data.positions;
       buffers.quaternions = data.quaternions;
-      data.observations.forEach(([id, value]: any) => subscriptions[id](value));
+      data.observations.forEach(([id, value]) => subscriptions[id](value));
+
       if (gl.xr && gl.xr.isPresenting) {
         gl.xr.getSession().requestAnimationFrame(loop);
       } else {
@@ -97,21 +98,29 @@ const Provider: React.FC<ProviderProps> = ({
       if (data.active) invalidate();
     };
 
-    worker.onmessage = (e) => {
-      switch (e.data.operation) {
+    worker.onmessage = (e: MessageEvent<ProviderEvent>) => {
+      switch (e.data.type) {
         case 'frame':
-          onFrame(e.data);
+          onFrame(e.data.props);
           break;
-        case 'ready':
-          setInitialized(true);
-          break;
-        case 'loaded':
-          onLoaded();
+        case 'collision':
+          events[e.data.props.target]({
+            ...e.data.props,
+            target: refs[e.data.props.target],
+            body: refs[e.data.props.body],
+          });
           break;
         default:
           break;
       }
     };
+
+    postMessage({
+      type: 'init',
+      props,
+    });
+    loop();
+
     return () => worker.terminate();
   }, []);
 
@@ -120,6 +129,7 @@ const Provider: React.FC<ProviderProps> = ({
     postMessage,
     bodies,
     refs,
+    events,
     buffers,
     subscriptions,
   }), [
@@ -129,11 +139,12 @@ const Provider: React.FC<ProviderProps> = ({
     refs,
     buffers,
     subscriptions,
+    events,
   ]);
 
   return (
     <context.Provider value={api as ProviderContext}>
-      {initialized && children()}
+      {children}
     </context.Provider>
   );
 };

@@ -9,13 +9,13 @@ export type MarbleProps = {
 
 const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
   const { camera } = useThree();
-  const [ref, { position, linearVelocity }] = useSphere(() => ({
+  const [ref, { position, applyImpulse }] = useSphere(() => ({
+    type: 'Dynamic',
     mass: 1,
     args: 1,
-    material: {
-      restitution: 0.5,
-      friction: 0.5,
-    },
+    restitution: 0.5,
+    friction: 0.5,
+    rollingFriction: 10,
     ...props,
   }));
 
@@ -80,7 +80,7 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
 
   useEffect(() => position.subscribe((value) => {
     camera.lookAt(value[0], value[1], value[2]);
-    camera.position.set(value[0] - 5, value[1] + 10, value[2] - 5);
+    camera.position.set(value[0] - 10, value[1] + 10, value[2] - 10);
     // camera.position.set(value[0] + 5, value[1] + 10, value[2] + 5);
   }), []);
 
@@ -215,11 +215,11 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
     //   + (movementDirectionVector[1] * 1.4) ** 2,
     // ));
 
-    linearVelocity.set(
+    applyImpulse([
       movementDirectionVector[0],
       moveY * 3,
       movementDirectionVector[1],
-    );
+    ], [0, 0, 0]);
   };
 
   return (
@@ -228,9 +228,6 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
       ref={ref}
       receiveShadow
       castShadow
-      onClick={() => {
-        linearVelocity.set(1, 0, 0);
-      }}
     >
       <sphereBufferGeometry attach="geometry" args={[1, 32, 32]} />
       <meshStandardMaterial attach="material" metalness={0.1} color="orange" />

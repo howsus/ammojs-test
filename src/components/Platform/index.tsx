@@ -9,12 +9,11 @@ export type PlatformProps = {
 const Platform: React.FC<PlatformProps> = ({ ...props }: PlatformProps) => {
   const [ref] = useBox(() => ({
     type: 'Static',
-    args: [2, 0.25, 2],
+    args: [4, 0.5, 4],
     margin: 0.05,
-    material: {
-      restitution: 1,
-      friction: 0.5,
-    },
+    restitution: 1,
+    friction: 0.5,
+    rollingFriction: 10,
     ...props,
   }));
 
