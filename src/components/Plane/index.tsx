@@ -1,29 +1,27 @@
 import React from 'react';
-import { MouseEvent } from 'react-three-fiber';
 
-import { useBox } from '../Physics';
+import { usePlane } from '../Physics';
 
-export type CubeProps = {
-  position?: [number, number, number];
-  onClick: (event: MouseEvent) => void;
+export type PlaneProps = {
+  onCollide: () => void;
 };
 
-const Cube: React.FC<CubeProps> = ({ onClick, ...props }: CubeProps) => {
-  const [ref] = useBox(() => ({
-    mass: 1,
-    args: [0.5, 0.5, 0.5],
+const Plane: React.FC<PlaneProps> = ({ onCollide }: PlaneProps) => {
+  const [ref] = usePlane(() => ({
+    type: 'Static',
+    args: [0, 1, 0],
+    position: [0, -10, 0],
+    margin: 0.05,
     material: {
-      restitution: 0.5,
+      restitution: 1,
+      rollingFriction: 10,
     },
-    ...props,
+    onCollide,
   }));
 
   return (
-    <mesh ref={ref} receiveShadow castShadow onClick={onClick}>
-      <boxBufferGeometry attach="geometry" args={[1, 1, 1]} />
-      <meshStandardMaterial attach="material" metalness={0.1} color="hotpink" />
-    </mesh>
+    <mesh ref={ref} />
   );
 };
 
-export default Cube;
+export default Plane;

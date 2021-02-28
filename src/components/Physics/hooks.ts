@@ -7,45 +7,57 @@ import React, {
 import { Buffers, context } from './setup';
 
 import {
+  Shape,
   AtomicProps,
-  ShapeType,
   BodyProps,
   BoxProps,
+  PlaneProps,
   SphereProps,
+  CylinderProps,
+  SubscribableValues,
 } from './worker/types';
+import { AddBodiesEvent } from './worker/events';
 
 export type BodyFn = (index: number) => BodyProps
 export type BoxFn = (index: number) => BoxProps;
+export type PlaneFn = (index: number) => PlaneProps;
 export type SphereFn = (index: number) => SphereProps;
+export type CylinderFn = (index: number) => CylinderProps;
 
 type ArgFn = (props: unknown) => unknown;
 
-type WorkerVec = {
-  set: (x: number, y: number, z: number) => void
-  copy: ({ x, y, z }: THREE.Vector3 | THREE.Euler) => void
-  subscribe: (callback: (value: number[]) => void) => void
+type WorkerVec<T extends keyof SubscribableValues> = {
+  set: (value: SubscribableValues[T]) => void
+  subscribe: (callback: (value: SubscribableValues[T]) => void) => void
 }
 
 export type WorkerProps<T> = {
   [K in keyof T]: {
-    set: (value: T[K]) => void
-    subscribe: (callback: (value: T[K]) => void) => () => void
+    set: (value: NonNullable<T[K]>) => void
+    subscribe: (callback: (value: NonNullable<T[K]>) => void) => () => void
   }
 }
+
 export type WorkerApi = WorkerProps<AtomicProps> & {
-  position: WorkerVec
-  rotation: WorkerVec
-  linearVelocity: WorkerVec
-  angularVelocity: WorkerVec
-  linearFactor: WorkerVec
-  angularFactor: WorkerVec
-  // applyForce: (force: number[], worldPoint: number[]) => void
-  // applyImpulse: (impulse: number[], worldPoint: number[]) => void
-  // applyLocalForce: (force: number[], localPoint: number[]) => void
-  // applyLocalImpulse: (impulse: number[], localPoint: number[]) => void
+  position: WorkerVec<'position'>;
+  rotation: WorkerVec<'rotation'>;
+  linearVelocity: WorkerVec<'linearVelocity'>;
+  angularVelocity: WorkerVec<'angularVelocity'>;
+  linearFactor: WorkerVec<'linearFactor'>;
+  angularFactor: WorkerVec<'angularFactor'>;
+  applyForce: (
+    force: [x: number, y: number, z: number],
+    worldPoint: [x: number, y: number, z: number],
+  ) => void
+  applyImpulse: (
+    impulse: [x: number, y: number, z: number],
+    worldPoint: [x: number, y: number, z: number],
+  ) => void
+  applyCentralLocalForce: (force: [x: number, y: number, z: number]) => void
+  applyCentralImpulse: (impulse: [x: number, y: number, z: number]) => void
 }
 
-type PublicApi = WorkerApi & { at: (index: number) => WorkerApi }
+type PublicApi = WorkerApi & { at: (index: number) => WorkerApi };
 
 export type Api = [React.MutableRefObject<THREE.Object3D | undefined>, PublicApi];
 
@@ -54,7 +66,7 @@ const temp = new Object3D();
 function prepare(object: Object3D, props: BodyProps, argFn: ArgFn) {
   object.position.set(...((props.position || [0, 0, 0]) as [number, number, number]));
   object.rotation.set(...((props.rotation || [0, 0, 0]) as [number, number, number]));
-  return { ...props, args: argFn(props.args) };
+  return { ...props, onCollide: Boolean(props.onCollide), args: argFn(props.args) };
 }
 
 function apply(object: THREE.Object3D, index: number, buffers: Buffers) {
@@ -67,7 +79,7 @@ function apply(object: THREE.Object3D, index: number, buffers: Buffers) {
 let subscriptionGuid = 0;
 
 export const useBody = (
-  type: ShapeType,
+  type: Shape,
   fn: BodyFn,
   argFn: ArgFn,
   fwdRef?: React.MutableRefObject<THREE.Object3D>,
@@ -75,7 +87,7 @@ export const useBody = (
   const localRef = useRef<THREE.Object3D>((null as unknown) as THREE.Object3D);
   const ref = fwdRef || localRef;
   const {
-    postMessage, bodies, buffers, refs, subscriptions,
+    postMessage, bodies, buffers, refs, subscriptions, events,
   } = useContext(context);
 
   useLayoutEffect(() => {
@@ -86,39 +98,50 @@ export const useBody = (
     const object = ref.current;
 
     let uuid = [object.uuid];
-    let props: BodyProps[];
+    let props: AddBodiesEvent['props']['props'];
 
     if (object instanceof InstancedMesh) {
       object.instanceMatrix.setUsage(DynamicDrawUsage);
       uuid = new Array(object.count).fill(0).map((_, i) => `${object.uuid}/${i}`);
 
       props = uuid.map((id, i) => {
-        const preparedProps = prepare(temp, fn(i), argFn);
+        const objectProps = fn(i);
+        const preparedProps = prepare(temp, objectProps, argFn);
+        if (objectProps.onCollide) {
+          events[uuid[i]] = objectProps.onCollide;
+        }
         temp.updateMatrix();
         object.setMatrixAt(i, temp.matrix);
         object.instanceMatrix.needsUpdate = true;
         return preparedProps;
       });
     } else {
-      props = [prepare(object, fn(0), argFn)];
+      const objectProps = fn(0);
+      if (objectProps.onCollide) {
+        events[uuid[0]] = objectProps.onCollide;
+      }
+      props = [prepare(object, objectProps, argFn)];
     }
 
-    props.forEach((_, index) => {
+    props.forEach((objectProps, index) => {
       refs[uuid[index]] = object;
     });
 
     postMessage({
-      operation: 'addBodies',
-      type,
-      uuid,
-      props,
+      type: 'addBodies',
+      props: {
+        type,
+        uuids: uuid,
+        props,
+      },
     });
 
     return () => {
       props.forEach((_, index) => {
         delete refs[uuid[index]];
-        postMessage({ operation: 'removeBodies', uuid });
+        if (_.onCollide) delete events[uuid[index]];
       });
+      postMessage({ type: 'removeBodies', props: { uuids: uuid } });
     };
   }, []);
 
@@ -142,44 +165,73 @@ export const useBody = (
 
   const api = useMemo(() => {
     const getUUID = (index?: number) => (index ? `${ref.current.uuid}/${index}` : ref.current.uuid);
-    const post = (operation: any, index?: number, props?: any) => ref.current && postMessage({
-      operation,
-      uuid: getUUID(index),
-      props,
-    });
-    const subscribe = (name: string, index?: number) => (
-      callback: (value: any) => void,
-    ) => {
-      subscriptionGuid += 1;
-      const id = subscriptionGuid;
-      subscriptions[id] = callback;
-      post('subscribe', index, { id, type: name });
-      return () => {
-        delete subscriptions[id];
-        post('unsubscribe', index, id);
-      };
-    };
-    const opString = (action: string, name: string) => {
-      const asfsafgdsf = (
-        action + name.charAt(0).toUpperCase() + name.slice(1)
-      );
 
-      console.log(asfsafgdsf);
-      return asfsafgdsf;
-    };
-    const makeVec = (name: string, index?: number) => ({
-      set: (x: number, y: number, z: number) => post(opString('set', name), index, [x, y, z]),
-      copy: ({ x, y, z }: THREE.Vector3 | THREE.Euler) => post(opString('set', name), index, [x, y, z]),
-      subscribe: subscribe(name, index),
-    });
+    function makeType<T extends string>(name: T): `set${Capitalize<keyof SubscribableValues>}` {
+      return `set${name.charAt(0).toUpperCase()}${name.slice(1)}` as `set${Capitalize<keyof SubscribableValues>}`;
+    }
+
+    function make<
+      T extends keyof SubscribableValues,
+    >(name: T, index?: number) {
+      return {
+        set: (value: SubscribableValues[T]) => ref.current && postMessage({
+          type: makeType(name),
+          props: { value: value as never, uuid: getUUID(index) },
+        }),
+        subscribe: (
+          callback: (value: SubscribableValues[T]) => void,
+        ) => {
+          subscriptionGuid += 1;
+          const id = subscriptionGuid;
+          subscriptions[id] = callback as never;
+          postMessage({ type: 'subscribe', props: { id, name, uuid: getUUID(index) } });
+          return () => {
+            delete subscriptions[id];
+            postMessage({ type: 'unsubscribe', props: { id, name, uuid: getUUID(index) } });
+          };
+        },
+      };
+    }
 
     const createApi = (index?: number): WorkerApi => ({
-      position: makeVec('position', index),
-      rotation: makeVec('quaternion', index),
-      linearVelocity: makeVec('linearVelocity', index),
-      angularVelocity: makeVec('angularVelocity', index),
-      linearFactor: makeVec('linearFactor', index),
-      angularFactor: makeVec('angularFactor', index),
+      position: make('position', index),
+      rotation: make('rotation', index),
+      linearVelocity: make('linearVelocity', index),
+      angularVelocity: make('angularVelocity', index),
+      linearFactor: make('linearFactor', index),
+      angularFactor: make('angularFactor', index),
+      friction: make('friction', index),
+      restitution: make('restitution', index),
+      rollingFriction: make('rollingFriction', index),
+      linearDamping: make('linearDamping', index),
+      angularDamping: make('angularDamping', index),
+      margin: make('margin', index),
+      applyForce: (
+        force: [x: number, y: number, z: number],
+        worldPoint: [x: number, y: number, z: number],
+      ) => ref.current && postMessage({
+        type: 'applyForce',
+        props: { value: [force, worldPoint], uuid: getUUID(index) },
+      }),
+      applyImpulse: (
+        force: [x: number, y: number, z: number],
+        worldPoint: [x: number, y: number, z: number],
+      ) => ref.current && postMessage({
+        type: 'applyImpulse',
+        props: { value: [force, worldPoint], uuid: getUUID(index) },
+      }),
+      applyCentralLocalForce: (
+        force: [x: number, y: number, z: number],
+      ) => ref.current && postMessage({
+        type: 'applyCentralLocalForce',
+        props: { value: [force, [0, 0, 0]], uuid: getUUID(index) },
+      }),
+      applyCentralImpulse: (
+        force: [x: number, y: number, z: number],
+      ) => ref.current && postMessage({
+        type: 'applyCentralImpulse',
+        props: { value: [force, [0, 0, 0]], uuid: getUUID(index) },
+      }),
     });
 
     const cache: { [index: number]: WorkerApi } = {};
@@ -204,7 +256,24 @@ export const useBox = (
   fwdRef?: React.MutableRefObject<THREE.Object3D>,
 ): Api => useBody('Box', fn, (args) => args || [1, 1, 1], fwdRef);
 
+export const usePlane = (
+  fn: PlaneFn,
+  fwdRef?: React.MutableRefObject<THREE.Object3D>,
+): Api => useBody('Plane', fn, (args) => args || [1, 1, 1], fwdRef);
+
 export const useSphere = (
   fn: SphereFn,
   fwdRef?: React.MutableRefObject<THREE.Object3D>,
 ): Api => useBody('Sphere', fn, (radius) => radius ?? 1 as number, fwdRef);
+
+export const useCylinder = (
+  fn: CylinderFn,
+  fwdRef?: React.MutableRefObject<THREE.Object3D>,
+): Api => useBody('Cylinder', fn, (args) => args || [1, 1, 1], fwdRef);
+
+export type {
+  BoxProps,
+  PlaneProps,
+  SphereProps,
+  CylinderProps,
+};
