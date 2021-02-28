@@ -187,26 +187,28 @@ export default () => {
     previousPosition: [-DATA[mapTypes[0]].blockSize[0], 0, 0],
   };
 
-  return flatten(map(
-    (mapType) => {
-      let tile = null;
-      const data = DATA[mapType];
+  return {
+    tiles: flatten(map(
+      (mapType) => {
+        let tile = null;
+        const data = DATA[mapType];
 
-      if (includes(mapType, [TYLE_SINGLE_SIMPLE, TYLE_SINGLE_MOVING])) {
-        tile = createSingle(
-          data,
-          world,
-        );
-      }
+        if (includes(mapType, [TYLE_SINGLE_SIMPLE, TYLE_SINGLE_MOVING])) {
+          tile = createSingle(
+            data,
+            world,
+          );
+        }
 
-      console.log('CenterPoint: ', tile.centerPoint);
+        console.log('CenterPoint: ', tile.centerPoint);
 
-      world.takenCoords.push(tile.centerPoint);
-      world.previousPosition = tile.position;
-      world.previousDirectionAngle = tile.directionAngle;
+        world.takenCoords.push(tile.centerPoint);
+        world.previousPosition = tile.position;
+        world.previousDirectionAngle = tile.directionAngle;
 
-      return tile;
-    },
-    mapTypes,
-  ));
+        return tile;
+      },
+      mapTypes,
+    )),
+  };
 };
