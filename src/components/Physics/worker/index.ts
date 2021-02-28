@@ -74,7 +74,7 @@ async function initEngine(initProps: Events.InitializeEvent['props']) {
       } else if (type === 'margin') {
         value = body.getCollisionShape().getMargin();
       } else {
-        value = body[`get${type.charAt(0).toUpperCase() + type.slice(0)}` as `get${Capitalize<typeof type>}`]();
+        value = body[`get${type.charAt(0).toUpperCase() + type.slice(1)}` as `get${Capitalize<typeof type>}`]();
       }
 
       if (value instanceof ammo.btVector3) {

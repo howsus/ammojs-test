@@ -1,12 +1,11 @@
 import React from 'react';
 
 import { usePlane } from '../Physics';
+import { useCommunicator } from '../Communicator';
 
-export type PlaneProps = {
-  onCollide: () => void;
-};
+const Plane: React.FC = () => {
+  const { emit } = useCommunicator();
 
-const Plane: React.FC<PlaneProps> = ({ onCollide }: PlaneProps) => {
   const [ref] = usePlane(() => ({
     type: 'Static',
     args: [0, 1, 0],
@@ -16,7 +15,7 @@ const Plane: React.FC<PlaneProps> = ({ onCollide }: PlaneProps) => {
       restitution: 1,
       rollingFriction: 10,
     },
-    onCollide,
+    onCollide: ({ target }) => emit('fell', { uuid: target.uuid }),
   }));
 
   return (

@@ -1,15 +1,19 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import { useThree } from 'react-three-fiber';
 
 import { useSphere } from '../Physics';
+import { useListener } from '../Communicator';
 
 export type MarbleProps = {
   position: [number, number, number];
 };
 
+type Velocity = [x: number, y: number, z: number];
+
 const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
   const { camera } = useThree();
-  const [ref, { position, applyImpulse }] = useSphere(() => ({
+  const velocity = useRef<Velocity>([0, 0, 0]);
+  const [ref, { position, applyImpulse, linearVelocity }] = useSphere(() => ({
     type: 'Dynamic',
     mass: 1,
     args: 1,
@@ -18,6 +22,14 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
     rollingFriction: 10,
     ...props,
   }));
+
+  useEffect(() => linearVelocity.subscribe((currentVelocity) => {
+    velocity.current = currentVelocity;
+  }));
+
+  useListener('fell', () => {
+    position.set(props.position);
+  });
 
   const moveDirection = {
     forward: 0,
@@ -29,8 +41,6 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
 
   const handleKey = (event: KeyboardEvent, action = 0) => {
     const { keyCode } = event;
-
-    // console.log('keyCode', keyCode, action);
 
     switch (keyCode) {
       case 87: // W: FORWARD
@@ -80,7 +90,7 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
 
   useEffect(() => position.subscribe((value) => {
     camera.lookAt(value[0], value[1], value[2]);
-    camera.position.set(value[0] - 10, value[1] + 10, value[2] - 10);
+    camera.position.set(value[0] - 10, 10, value[2] - 10);
     // camera.position.set(value[0] + 5, value[1] + 10, value[2] + 5);
   }), []);
 
@@ -91,7 +101,14 @@ const Marble: React.FC<MarbleProps> = ({ ...props }: MarbleProps) => {
     ];
 
     if (ref && ref.current) {
-      // console.log('ref', ref.current.position);
+      const vl = Math.sqrt(velocity.current?.reduce(
+        (acc, val) => acc + (val * val),
+        0,
+      ));
+
+      if (vl > 10) {
+        return;
+      }
 
       cameraDirectionVector = [
         ref.current.position.x - camera.position.x,
